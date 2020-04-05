@@ -20,7 +20,7 @@
 #
 # DATE        Name  Description
 # -----------------------------------------------------------------------------
-# 04/05/20    NH    Implemented GUI for TaskListViewer
+# 04/05/20    NH    Implemented GUI for TaskListViewer, added branch info
 # 02/17/20    NH    Initial commit
 #
 ###############################################################################
@@ -32,6 +32,11 @@ import logging
 import tkcalendar as tkc
 import sys
 import os
+
+MAJOR_VERSION = 0
+MINOR_VERSION = 0
+BUILD_NUMBER = 1
+BRANCH = "NH0"
 
 
 class Project:
@@ -748,7 +753,8 @@ class ProjectLog(tk.Tk):
         self.__taskList = TaskList("test.xml")
 #         self.__taskList.open()
 
-        self.title("Project Task Tracker")
+        self.title("Project Task Tracker v%d.%d.%d.%s" %
+                   (MAJOR_VERSION, MINOR_VERSION, BUILD_NUMBER, BRANCH))
         self.__createWidgets()
         self.__createMenu()
 
