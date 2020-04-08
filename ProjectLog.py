@@ -20,6 +20,7 @@
 #
 # DATE        Name  Description
 # -----------------------------------------------------------------------------
+# 04/07/20    NH    Added date based highlighting, fixed date types
 # 04/06/20    NH    Implemented GUI for ProjectListViewer, AddProjectDialog, and
 #                   AddTaskDialog, and implemented shortcut keys for basic
 #                   functionality
@@ -45,6 +46,8 @@ BRANCH = "NH0"
 
 BACKGROUND_COLOR = '#d9d9d9'
 SELECTION_COLOR = '#a9def9'
+OVERDUE_COLOR = '#f4a3a3'
+UPCOMING_COLOR = '#ebec7f'
 
 
 class Project:
@@ -247,7 +250,7 @@ class TaskList:
             projectName = project.attrib['name']
             projectID = uuid.UUID(project.attrib['id'])
             projectDate = dt.datetime.strptime(
-                project.attrib['date'], '%m/%d/%y')
+                project.attrib['date'], '%m/%d/%y').date()
             projectObj = Project(projectName, projectDate, projectID)
             self.__projects.append(projectObj)
             projectMap[projectID] = projectObj
@@ -256,7 +259,8 @@ class TaskList:
             taskID = uuid.UUID(task.attrib['id'])
             projectID = uuid.UUID(task.attrib['project'])
             project = projectMap[projectID]
-            taskDate = dt.datetime.strptime(task.attrib['date'], '%m/%d/%y')
+            taskDate = dt.datetime.strptime(
+                task.attrib['date'], '%m/%d/%y').date()
             taskAction = actionMap[task.attrib['action']]
             taskDesc = task.text
             taskObj = Task(taskDate, project, taskDesc, taskAction, taskID)
@@ -270,7 +274,7 @@ class TaskList:
     def close(self):
         self.__exit__(None, None, None)
 
-    def save(self):
+    def save(self, *args):
         root = ET.Element('data')
         root.set('version', '1')
         tasks = ET.SubElement(root, 'tasks')
@@ -352,9 +356,18 @@ class TaskListViewer(tk.Frame):
     SELECTED_TASK_FRAME_VIEW = {
         "highlightbackground": 'black', 'highlightthickness': 1}
     SELECTED_TASK_WIDGET_VIEW = {'bg': SELECTION_COLOR}
+
     NORMAL_TASK_FRAME_VIEW = {
         'highlightbackground': 'black', 'highlightthickness': 1}
     NORMAL_TASK_WIDGET_VIEW = {'bg': BACKGROUND_COLOR}
+
+    OVERDUE_TASK_FRAME_VIEW = {
+        'highlightbackground': 'black', 'highlightthickness': 1}
+    OVERDUE_TASK_WIDGET_VIEW = {'bg': OVERDUE_COLOR}
+
+    UPCOMING_TASK_FRAME_VIEW = {
+        'highlightbackground': 'black', 'highlightthickness': 1}
+    UPCOMING_TASK_WIDGET_VIEW = {'bg': UPCOMING_COLOR}
 
     def debug(self):
         print(self.debugWidget.winfo_width())
@@ -403,8 +416,11 @@ class TaskListViewer(tk.Frame):
 
         row = 1
         for task in sorted(self.__model.getTasks()):
+            dueDate = task.getDate()
+            frameView, widgetView = self.getViewDefs(dueDate)
+
             taskFrame = tk.Frame(self.__frame)
-            taskFrame.configure(**TaskListViewer.NORMAL_TASK_FRAME_VIEW)
+            taskFrame.configure(**frameView)
             taskFrame.grid(row=row, column=0, sticky='ew')
             for column in TaskListViewer.ColumnProperties:
                 taskFrame.grid_columnconfigure(
@@ -412,7 +428,7 @@ class TaskListViewer(tk.Frame):
             self.__frameMap[task] = taskFrame
 
             datelabel = tk.Label(
-                taskFrame, text=task.dueDate.strftime('%a, %b %d'), anchor='w', **TaskListViewer.NORMAL_TASK_WIDGET_VIEW)
+                taskFrame, text=task.dueDate.strftime('%a, %b %d'), anchor='w', **widgetView)
             datelabel.grid(
                 row=0, column=TaskListViewer.ColumnProperties.DATE.value['index'], sticky='ew')
             datelabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
@@ -420,7 +436,7 @@ class TaskListViewer(tk.Frame):
             self.__taskMap[datelabel] = task
 
             projectLabel = tk.Label(
-                taskFrame, text=task.project.name, anchor='w', **TaskListViewer.NORMAL_TASK_WIDGET_VIEW)
+                taskFrame, text=task.project.name, anchor='w', **widgetView)
             projectLabel.grid(
                 row=0, column=TaskListViewer.ColumnProperties.PROJECT.value['index'], sticky='ew')
             projectLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
@@ -428,7 +444,7 @@ class TaskListViewer(tk.Frame):
             self.__taskMap[projectLabel] = task
 
             actionLabel = tk.Label(
-                taskFrame, text=Task.ActionStringMap[task.action], anchor='w', **TaskListViewer.NORMAL_TASK_WIDGET_VIEW)
+                taskFrame, text=Task.ActionStringMap[task.action], anchor='w', **widgetView)
             actionLabel.grid(
                 row=0, column=TaskListViewer.ColumnProperties.ACTION.value['index'], sticky='ew')
             actionLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
@@ -436,7 +452,7 @@ class TaskListViewer(tk.Frame):
             self.__taskMap[actionLabel] = task
 
             descLabel = tk.Label(
-                taskFrame, text=task.desc, anchor='w', **TaskListViewer.NORMAL_TASK_WIDGET_VIEW)
+                taskFrame, text=task.desc, anchor='w', **widgetView)
             descLabel.grid(
                 row=0, column=TaskListViewer.ColumnProperties.DESCRIPTION.value['index'], sticky='ew')
             descLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
@@ -461,10 +477,12 @@ class TaskListViewer(tk.Frame):
             self.__taskSelected = task
         else:
             # select from someone else
+            frameView, widgetView = self.getViewDefs(
+                self.__taskSelected.getDate())
             self.__frameMap[self.__taskSelected].configure(
-                **TaskListViewer.NORMAL_TASK_FRAME_VIEW)
+                **frameView)
             for widget in self.__widgetMap[self.__taskSelected]:
-                widget.configure(**TaskListViewer.NORMAL_TASK_WIDGET_VIEW)
+                widget.configure(**widgetView)
             frame.configure(**TaskListViewer.SELECTED_TASK_FRAME_VIEW)
             for widget in widgets:
                 widget.configure(**TaskListViewer.SELECTED_TASK_WIDGET_VIEW)
@@ -530,8 +548,14 @@ class TaskListViewer(tk.Frame):
 
     def _onTaskSingleClick(self, event):
         task = self.__taskMap[event.widget]
+
+        if self.__currentInputType != None:
+            frameView, widgetView = self.getViewDefs(
+                self.__taskSelected.getDate())
+
         # Cancel current input
         if self.__currentInputType == TaskListViewer.ColumnProperties.DATE:
+
             parent = self.__currentInputWidget.master
             self.__taskMap.pop(self.__currentInputWidget)
             self.__currentInputWidget.grid_remove()
@@ -539,7 +563,7 @@ class TaskListViewer(tk.Frame):
             self.__currentInputWidget = None
 
             datelabel = tk.Label(
-                parent, text=self.__taskSelected.dueDate.strftime('%a, %b %d'), anchor='w', **TaskListViewer.NORMAL_TASK_WIDGET_VIEW)
+                parent, text=self.__taskSelected.dueDate.strftime('%a, %b %d'), anchor='w', **widgetView)
             datelabel.grid(
                 row=0, column=TaskListViewer.ColumnProperties.DATE.value['index'], sticky='ew')
             datelabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
@@ -555,7 +579,7 @@ class TaskListViewer(tk.Frame):
             self.__currentInputWidget = None
 
             projectLabel = tk.Label(
-                parent, text=self.__taskSelected.project.name, anchor='w', **TaskListViewer.NORMAL_TASK_WIDGET_VIEW)
+                parent, text=self.__taskSelected.project.name, anchor='w', **widgetView)
             projectLabel.grid(
                 row=0, column=TaskListViewer.ColumnProperties.PROJECT.value['index'], sticky='ew')
             projectLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
@@ -572,7 +596,7 @@ class TaskListViewer(tk.Frame):
             self.__currentInputWidget = None
 
             actionLabel = tk.Label(
-                parent, text=Task.ActionStringMap[self.__taskSelected.action], anchor='w', **TaskListViewer.NORMAL_TASK_WIDGET_VIEW)
+                parent, text=Task.ActionStringMap[self.__taskSelected.action], anchor='w', **widgetView)
             actionLabel.grid(
                 row=0, column=TaskListViewer.ColumnProperties.ACTION.value['index'], sticky='ew')
             actionLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
@@ -589,7 +613,7 @@ class TaskListViewer(tk.Frame):
             self.__currentInputWidget = None
 
             descLabel = tk.Label(
-                parent, text=self.__taskSelected.desc, anchor='w', **TaskListViewer.NORMAL_TASK_WIDGET_VIEW)
+                parent, text=self.__taskSelected.desc, anchor='w', **widgetView)
             descLabel.grid(
                 row=0, column=TaskListViewer.ColumnProperties.DESCRIPTION.value['index'], sticky='ew')
             descLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
@@ -603,9 +627,10 @@ class TaskListViewer(tk.Frame):
         widgets = self.__widgetMap[task]
         if task is self.__taskSelected:
             # Deselect current task
-            frame.configure(**TaskListViewer.NORMAL_TASK_FRAME_VIEW)
+            frameView, widgetView = self.getViewDefs(task.getDate())
+            frame.configure(**frameView)
             for widget in widgets:
-                widget.configure(**TaskListViewer.NORMAL_TASK_WIDGET_VIEW)
+                widget.configure(**widgetView)
             self.__taskSelected = None
         elif self.__taskSelected is None:
             # select from nothing else
@@ -614,11 +639,13 @@ class TaskListViewer(tk.Frame):
                 widget.configure(**TaskListViewer.SELECTED_TASK_WIDGET_VIEW)
             self.__taskSelected = task
         else:
+            frameView, widgetView = self.getViewDefs(
+                self.__taskSelected.getDate())
             # select from someone else
             self.__frameMap[self.__taskSelected].configure(
-                **TaskListViewer.NORMAL_TASK_FRAME_VIEW)
+                **frameView)
             for widget in self.__widgetMap[self.__taskSelected]:
-                widget.configure(**TaskListViewer.NORMAL_TASK_WIDGET_VIEW)
+                widget.configure(**widgetView)
             frame.configure(**TaskListViewer.SELECTED_TASK_FRAME_VIEW)
             for widget in widgets:
                 widget.configure(**TaskListViewer.SELECTED_TASK_WIDGET_VIEW)
@@ -722,6 +749,21 @@ class TaskListViewer(tk.Frame):
         task = self.__taskSelected
         self.__model.removeTask(task)
         self.draw()
+
+    def getViewDefs(self, dueDate):
+        today = dt.date.today()
+        # this is the date before which things are upcoming
+        limitDate = today + dt.timedelta(days=7)
+        if dueDate <= today:
+            frameView = TaskListViewer.OVERDUE_TASK_FRAME_VIEW
+            widgetView = TaskListViewer.OVERDUE_TASK_WIDGET_VIEW
+        elif dueDate <= limitDate:
+            frameView = TaskListViewer.UPCOMING_TASK_FRAME_VIEW
+            widgetView = TaskListViewer.UPCOMING_TASK_WIDGET_VIEW
+        else:
+            frameView = TaskListViewer.NORMAL_TASK_FRAME_VIEW
+            widgetView = TaskListViewer.NORMAL_TASK_WIDGET_VIEW
+        return frameView, widgetView
 
 
 class ProjectListviewer(tk.Frame):
@@ -1019,7 +1061,7 @@ class AddTaskDialog(tk.Toplevel):
         projectMenu.grid(row=1, column=0, sticky='ew')
 
         actionMenu = tk.OptionMenu(self.__bodyFrame, self.__actionSelector, *
-                                   tuple(Task.ActionStringMap.values()))
+                                   (Task.ActionStringMap[action] for action in Task.Action))
         actionMenu.configure(takefocus=1)
         actionMenu.grid(row=2, column=0, sticky='ew')
 
@@ -1048,7 +1090,8 @@ class AddTaskDialog(tk.Toplevel):
         self.withdraw()
         self.update_idletasks()
 
-        dueDate = dt.datetime.strptime(self.__dateSelector.get(), '%m/%d/%y')
+        dueDate = dt.datetime.strptime(
+            self.__dateSelector.get(), '%m/%d/%y').date()
         project = self.__taskList.getProjectByName(
             self.__projectSelector.get())
         desc = self.__descVar.get()
@@ -1131,7 +1174,7 @@ class AddProjectDialog(tk.Toplevel):
 
 #         apply
         project = Project(self.__projectNamevar.get(), dt.datetime.strptime(
-            self.__dateSelector.get(), '%m/%d/%y'))
+            self.__dateSelector.get(), '%m/%d/%y').date())
         self.__taskList.addProject(project)
         self.__cancel()
 
@@ -1187,8 +1230,9 @@ class ProjectLog(tk.Tk):
         self.__menuBar.add_cascade(label="Debug", menu=debugmenu)
         self.config(menu=self.__menuBar)
 
-        self.bind("<Control-Shift-c>", self.__taskListFrame.markComplete)
+        self.bind("<Control-Shift-C>", self.__taskListFrame.markComplete)
         self.bind("<Control-Shift-A>", self.__addTask)
+        self.bind("<Control-s>", self.__taskList.save)
 
     def __printProjects(self):
         print([project.name for project in self.__taskList.getProjects()])
