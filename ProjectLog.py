@@ -890,7 +890,7 @@ class ProjectListviewer(tk.Frame):
             self.__projectMap[descEntry] = project
         else:
             # date widget
-            date = project.getDate().date()
+            date = project.getDate()
 
             dateEntry = tkc.DateEntry(frame, textvariable=self.__inputVar,
                                       firstweekday='sunday', year=date.year, month=date.month, day=date.day)
