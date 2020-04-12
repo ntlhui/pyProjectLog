@@ -20,7 +20,8 @@
 #
 # DATE        Name  Description
 # -----------------------------------------------------------------------------
-# 04/12/20    NH    Added redraw on edit, added save on edit
+# 04/12/20    NH    Added redraw on edit, added save on edit, fixed project list
+#                   view
 # 04/07/20    NH    Added date based highlighting, fixed date types
 # 04/06/20    NH    Implemented GUI for ProjectListViewer, AddProjectDialog, and
 #                   AddTaskDialog, and implemented shortcut keys for basic
@@ -780,8 +781,8 @@ class TaskListViewer(tk.Frame):
 class ProjectListviewer(tk.Frame):
 
     class Columns(Enum):
-        NAME = {'index': 0, 'width': 120, 'label': 'Project', 'weight': 0}
-        DATE = {'index': 1, 'width': 150, 'label': 'Date', 'weight': 0}
+        NAME = {'index': 1, 'width': 120, 'label': 'Project', 'weight': 1}
+        DATE = {'index': 0, 'width': 85, 'label': 'Date', 'weight': 0}
 
     SELECTED_PROJECT_FRAME_VIEW = {
         "highlightbackground": 'black', 'highlightthickness': 1}
@@ -830,21 +831,24 @@ class ProjectListviewer(tk.Frame):
 
         for project in sorted(self.__model.getProjects()):
             projectFrame = tk.Frame(
-                self.__dataFrame, highlightbackground='black', highlightthickness=1)
+                self.__dataFrame, **ProjectListviewer.NORMAL_PROJECT_FRAME_VIEW)
             projectFrame.grid(row=row, column=0, sticky='ew')
-            projectFrame.grid_columnconfigure(0, minsize=120)
-            projectFrame.grid_columnconfigure(1, minsize=150)
+            for column in ProjectListviewer.Columns:
+                projectFrame.grid_columnconfigure(
+                    column.value['index'], minsize=column.value['width'], weight=column.value['weight'])
             self.__frameMap[project] = projectFrame
 
             nameLabel = tk.Label(projectFrame, text=project.name, anchor='w')
-            nameLabel.grid(row=0, column=0, sticky='ew')
+            nameLabel.grid(
+                row=row, column=ProjectListviewer.Columns.NAME.value['index'], sticky='ew')
             nameLabel.bind('<Double-Button-1>', self._onProjectDoubleClick)
             nameLabel.bind('<Button-1>', self._onProjectSingleClick)
             self.__projectMap[nameLabel] = project
 
             dateLabel = tk.Label(projectFrame, text=project.getDate().strftime(
                 '%m/%d/%Y'), anchor='w')
-            dateLabel.grid(row=0, column=1, sticky='ew')
+            dateLabel.grid(
+                row=row, column=ProjectListviewer.Columns.DATE.value['index'], sticky='ew')
             dateLabel.bind('<Double-Button-1>', self._onProjectDoubleClick)
             dateLabel.bind('<Button-1>', self._onProjectSingleClick)
             self.__projectMap[dateLabel] = project
