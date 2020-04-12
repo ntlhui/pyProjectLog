@@ -21,7 +21,7 @@
 # DATE        Name  Description
 # -----------------------------------------------------------------------------
 # 04/12/20    NH    Added redraw on edit, added save on edit, fixed project list
-#                   view
+#                   view, added project filter
 # 04/07/20    NH    Added date based highlighting, fixed date types
 # 04/06/20    NH    Implemented GUI for ProjectListViewer, AddProjectDialog, and
 #                   AddTaskDialog, and implemented shortcut keys for basic
@@ -40,6 +40,7 @@ import tkinter.messagebox as tkm
 import sys
 import os
 import uuid
+import re
 
 MAJOR_VERSION = 0
 MINOR_VERSION = 0
@@ -382,10 +383,13 @@ class TaskListViewer(tk.Frame):
         self.__taskSelected = None
         self.__widgetMap = {}
         self.__inputVar = tk.StringVar()
+        self.__inputVarTraceID = None
+        self.__filterVar = tk.StringVar()
+        self.__filterVarTraceID = None
         self.__currentInputWidget = None
         self.__currentInputType = None
-        self.__inputVarTraceID = None
         self.__frame = None
+        self.__filterPattern = '.*'
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -395,75 +399,67 @@ class TaskListViewer(tk.Frame):
     def draw(self):
         if self.__frame is not None:
             self.__frame.destroy()
-        self.__taskMap = {}
-        self.__frameMap = {}
-        self.__widgetMap = {}
-        self.__taskSelected = None
-        self.__currentInputType = None
-        self.__currentInputWidget = None
-        self.__inputVarTraceID = None
+
+        self.__headingWidgets = {}
 
         self.__frame = tk.Frame(self)
         self.__frame.grid(row=0, column=0, sticky='nesw')
         self.__frame.grid_columnconfigure(0, weight=1)
 
-        headingFrame = tk.Frame(self.__frame)
-        headingFrame.grid(row=0, column=0, sticky='ew')
+        self.__headingFrame = tk.Frame(self.__frame)
+        self.__headingFrame.grid(row=0, column=0, sticky='ew')
 
         for column in TaskListViewer.ColumnProperties:
-            headingFrame.grid_columnconfigure(
+            self.__headingFrame.grid_columnconfigure(
                 column.value['index'], minsize=column.value['width'], weight=column.value['weight'])
-            tk.Label(headingFrame, text=column.value['label'], anchor='w').grid(
+            headingWidget = tk.Label(
+                self.__headingFrame, text=column.value['label'], anchor='w')
+            headingWidget.grid(
                 row=0, column=column.value['index'], sticky='ew')
+            headingWidget.bind('<Double-Button-1>', self._onHeadingDoubleClick)
+            self.__headingWidgets[headingWidget] = column
 
-        row = 1
-        for task in sorted(self.__model.getTasks()):
-            dueDate = task.getDate()
-            frameView, widgetView = self.getViewDefs(dueDate)
+        self._drawTasks()
 
-            taskFrame = tk.Frame(self.__frame)
-            taskFrame.configure(**frameView)
-            taskFrame.grid(row=row, column=0, sticky='ew')
-            for column in TaskListViewer.ColumnProperties:
-                taskFrame.grid_columnconfigure(
-                    column.value['index'], minsize=column.value['width'], weight=column.value['weight'])
-            self.__frameMap[task] = taskFrame
+    def _onHeadingDoubleClick(self, event):
+        column = self.__headingWidgets[event.widget]
+        if column == TaskListViewer.ColumnProperties.ACTION:
+            pass
+        elif column == TaskListViewer.ColumnProperties.COLLAPSE:
+            pass
+        elif column == TaskListViewer.ColumnProperties.DATE:
+            pass
+        elif column == TaskListViewer.ColumnProperties.DESCRIPTION:
+            pass
+        elif column == TaskListViewer.ColumnProperties.PROJECT:
+            self.__filterVar.set('All')
+            projectMenu = tk.OptionMenu(self.__headingFrame, self.__filterVar, "All", *(
+                project.name for project in self.__model.getProjects()))
+            projectMenu.configure(takefocus=1)
+            projectMenu.grid(row=0, column=column.value['index'], sticky='ew')
+            self.__filterVarTraceID = self.__filterVar.trace(
+                'w', self._onFilterSelected)
+            projectMenu.bind('<Button-3>', self._onHeadingRightClick)
+            self.__headingWidgets[projectMenu] = column
+        else:
+            print("ERROR")
 
-            datelabel = tk.Label(
-                taskFrame, text=task.dueDate.strftime('%a, %b %d'), anchor='w', **widgetView)
-            datelabel.grid(
-                row=0, column=TaskListViewer.ColumnProperties.DATE.value['index'], sticky='ew')
-            datelabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
-            datelabel.bind('<Button-1>', self._onTaskSingleClick)
-            self.__taskMap[datelabel] = task
-
-            projectLabel = tk.Label(
-                taskFrame, text=task.project.name, anchor='w', **widgetView)
-            projectLabel.grid(
-                row=0, column=TaskListViewer.ColumnProperties.PROJECT.value['index'], sticky='ew')
-            projectLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
-            projectLabel.bind('<Button-1>', self._onTaskSingleClick)
-            self.__taskMap[projectLabel] = task
-
-            actionLabel = tk.Label(
-                taskFrame, text=Task.ActionStringMap[task.action], anchor='w', **widgetView)
-            actionLabel.grid(
-                row=0, column=TaskListViewer.ColumnProperties.ACTION.value['index'], sticky='ew')
-            actionLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
-            actionLabel.bind('<Button-1>', self._onTaskSingleClick)
-            self.__taskMap[actionLabel] = task
-
-            descLabel = tk.Label(
-                taskFrame, text=task.desc, anchor='w', **widgetView)
-            descLabel.grid(
-                row=0, column=TaskListViewer.ColumnProperties.DESCRIPTION.value['index'], sticky='ew')
-            descLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
-            descLabel.bind('<Button-1>', self._onTaskSingleClick)
-            self.__taskMap[descLabel] = task
-
-            self.__widgetMap[task] = [datelabel,
-                                      projectLabel, actionLabel, descLabel]
-            row += 1
+    def _onHeadingRightClick(self, event):
+        column = self.__headingWidgets[event.widget]
+        if column == TaskListViewer.ColumnProperties.ACTION:
+            pass
+        elif column == TaskListViewer.ColumnProperties.COLLAPSE:
+            pass
+        elif column == TaskListViewer.ColumnProperties.DATE:
+            pass
+        elif column == TaskListViewer.ColumnProperties.DESCRIPTION:
+            pass
+        elif column == TaskListViewer.ColumnProperties.PROJECT:
+            self.__filterVar.set('All')
+            event.widget.destroy()
+            self.__headingWidgets.pop(event.widget)
+        else:
+            print("ERROR")
 
     def _onTaskDoubleClick(self, event):
         # Select current task
@@ -678,6 +674,13 @@ class TaskListViewer(tk.Frame):
         self.draw()
         self.__model.save()
 
+    def _onFilterSelected(self, *args):
+        if self.__filterVar.get() == 'All':
+            self.__filterPattern = '.*'
+        else:
+            self.__filterPattern = self.__filterVar.get()
+        self._drawTasks()
+
     def _onProjectSelected(self, *args):
         # Update project
         task = self.__taskMap[self.__currentInputWidget]
@@ -776,6 +779,68 @@ class TaskListViewer(tk.Frame):
             frameView = TaskListViewer.NORMAL_TASK_FRAME_VIEW
             widgetView = TaskListViewer.NORMAL_TASK_WIDGET_VIEW
         return frameView, widgetView
+
+    def _drawTasks(self):
+        if len(self.__frameMap) > 0:
+            # clear existing
+            for frame in list(self.__frameMap.values()):
+                frame.destroy()
+        self.__taskMap = {}
+        self.__frameMap = {}
+        self.__widgetMap = {}
+        self.__taskSelected = None
+        self.__currentInputType = None
+        self.__currentInputWidget = None
+        self.__inputVarTraceID = None
+
+        row = 1
+        prog = re.compile(self.__filterPattern)
+        for task in sorted(self.__model.getTasks()):
+            result = prog.match(task.project.name)
+            if result is None:
+                continue
+
+            dueDate = task.getDate()
+            frameView, widgetView = self.getViewDefs(dueDate)
+            taskFrame = tk.Frame(self.__frame)
+            taskFrame.configure(**frameView)
+            taskFrame.grid(row=row, column=0, sticky='ew')
+            for column in TaskListViewer.ColumnProperties:
+                taskFrame.grid_columnconfigure(
+                    column.value['index'], minsize=column.value['width'], weight=column.value['weight'])
+
+            self.__frameMap[task] = taskFrame
+            datelabel = tk.Label(
+                taskFrame, text=task.dueDate.strftime('%a, %b %d'), anchor='w', **widgetView)
+            datelabel.grid(
+                row=0, column=TaskListViewer.ColumnProperties.DATE.value['index'], sticky='ew')
+            datelabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
+            datelabel.bind('<Button-1>', self._onTaskSingleClick)
+            self.__taskMap[datelabel] = task
+            projectLabel = tk.Label(
+                taskFrame, text=task.project.name, anchor='w', **widgetView)
+            projectLabel.grid(
+                row=0, column=TaskListViewer.ColumnProperties.PROJECT.value['index'], sticky='ew')
+            projectLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
+            projectLabel.bind('<Button-1>', self._onTaskSingleClick)
+            self.__taskMap[projectLabel] = task
+            actionLabel = tk.Label(
+                taskFrame, text=Task.ActionStringMap[task.action], anchor='w', **widgetView)
+            actionLabel.grid(
+                row=0, column=TaskListViewer.ColumnProperties.ACTION.value['index'], sticky='ew')
+            actionLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
+            actionLabel.bind('<Button-1>', self._onTaskSingleClick)
+            self.__taskMap[actionLabel] = task
+            descLabel = tk.Label(
+                taskFrame, text=task.desc, anchor='w', **widgetView)
+            descLabel.grid(
+                row=0, column=TaskListViewer.ColumnProperties.DESCRIPTION.value['index'], sticky='ew')
+            descLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
+            descLabel.bind('<Button-1>', self._onTaskSingleClick)
+            self.__taskMap[descLabel] = task
+            self.__widgetMap[task] = [datelabel,
+                                      projectLabel, actionLabel, descLabel]
+            row += 1
 
 
 class ProjectListviewer(tk.Frame):
