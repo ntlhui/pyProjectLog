@@ -20,6 +20,7 @@
 #
 # DATE        Name  Description
 # -----------------------------------------------------------------------------
+# 04/12/20    NH    Added redraw on edit, added save on edit
 # 04/07/20    NH    Added date based highlighting, fixed date types
 # 04/06/20    NH    Implemented GUI for ProjectListViewer, AddProjectDialog, and
 #                   AddTaskDialog, and implemented shortcut keys for basic
@@ -492,7 +493,7 @@ class TaskListViewer(tk.Frame):
         self.__taskMap.pop(event.widget)
         event.widget.destroy()
         if event.widget is widgets[0]:
-            date = task.getDate().date()
+            date = task.getDate()
 
             dateEntry = tkc.DateEntry(
                 frame, textvariable=self.__inputVar, firstweekday='sunday', year=date.year, month=date.month, day=date.day)
@@ -655,7 +656,8 @@ class TaskListViewer(tk.Frame):
         # Update date
         task = self.__taskMap[event.widget]
 
-        task.setDate(dt.datetime.strptime(self.__inputVar.get(), '%m/%d/%y'))
+        task.setDate(dt.datetime.strptime(
+            self.__inputVar.get(), '%m/%d/%y').date())
 
         parent = self.__currentInputWidget.master
         self.__taskMap.pop(self.__currentInputWidget)
@@ -672,6 +674,8 @@ class TaskListViewer(tk.Frame):
 
         self.__taskMap[datelabel] = task
         self.__widgetMap[task][0] = datelabel
+        self.draw()
+        self.__model.save()
 
     def _onProjectSelected(self, *args):
         # Update project
@@ -696,6 +700,8 @@ class TaskListViewer(tk.Frame):
         self.__taskMap[projectLabel] = task
         self.__widgetMap[task][1] = projectLabel
         self.__inputVar.trace_vdelete('w', self.__inputVarTraceID)
+        self.draw()
+        self.__model.save()
 
     def _onActionSelected(self, *args):
         # Update action
@@ -722,6 +728,8 @@ class TaskListViewer(tk.Frame):
         self.__taskMap[actionLabel] = task
         self.__widgetMap[task][2] = actionLabel
         self.__inputVar.trace_vdelete('w', self.__inputVarTraceID)
+        self.draw()
+        self.__model.save()
 
     def _onDescEntered(self, event):
         task = self.__taskMap[event.widget]
@@ -744,16 +752,19 @@ class TaskListViewer(tk.Frame):
 
         self.__taskMap[descLabel] = task
         self.__widgetMap[task][3] = descLabel
+        self.draw()
+        self.__model.save()
 
     def markComplete(self, event=None):
         task = self.__taskSelected
         self.__model.removeTask(task)
         self.draw()
+        self.__model.save()
 
     def getViewDefs(self, dueDate):
         today = dt.date.today()
         # this is the date before which things are upcoming
-        limitDate = today + dt.timedelta(days=7)
+        limitDate = (today + dt.timedelta(days=7))
         if dueDate <= today:
             frameView = TaskListViewer.OVERDUE_TASK_FRAME_VIEW
             widgetView = TaskListViewer.OVERDUE_TASK_WIDGET_VIEW
@@ -991,6 +1002,8 @@ class ProjectListviewer(tk.Frame):
 
         self.__projectMap[descLabel] = project
         self.__widgetMap[project][0] = descLabel
+        self.draw()
+        self.__model.save()
 
     def _onDateEntered(self, event):
         # Update date
@@ -1014,12 +1027,15 @@ class ProjectListviewer(tk.Frame):
 
         self.__projectMap[dateLabel] = project
         self.__widgetMap[project][1] = dateLabel
+        self.draw()
+        self.__model.save()
 
     def removeProject(self):
         if self.__projectSelected is None:
             return
         self.__model.removeProject(self.__projectSelected)
         self.draw()
+        self.__model.save()
 
 
 class AddTaskDialog(tk.Toplevel):
@@ -1232,7 +1248,8 @@ class ProjectLog(tk.Tk):
 
         self.bind("<Control-Shift-C>", self.__taskListFrame.markComplete)
         self.bind("<Control-Shift-A>", self.__addTask)
-        self.bind("<Control-s>", self.__taskList.save)
+        self.bind("<Control-s>", self.save)
+        self.bind("<F5>", self.__redraw)
 
     def __printProjects(self):
         print([project.name for project in self.__taskList.getProjects()])
@@ -1249,8 +1266,16 @@ class ProjectLog(tk.Tk):
         AddTaskDialog(self, self.__taskList)
         self.__taskListFrame.draw()
 
+    def __redraw(self, event=None):
+        self.__taskListFrame.draw()
+        self.__projectListFrame.draw()
+
+    def save(self, event=None):
+        self.__taskList.save()
+
 
 if __name__ == '__main__':
+    global app
     logName = dt.datetime.now().strftime('%Y.%m.%d.%H.%M.%S.log')
     logName = 'log.log'
     logger = logging.getLogger()
@@ -1266,4 +1291,5 @@ if __name__ == '__main__':
     fileOutput.setFormatter(formatter)
     logger.addHandler(fileOutput)
 
-    ProjectLog().mainloop()
+    app = ProjectLog()
+    app.mainloop()
