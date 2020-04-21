@@ -18,16 +18,17 @@
 #
 ###############################################################################
 #
-# DATE        Name  Description
+# DATE      WHO Description
 # -----------------------------------------------------------------------------
-# 04/12/20    NH    Added redraw on edit, added save on edit, fixed project list
-#                   view, added project filter
-# 04/07/20    NH    Added date based highlighting, fixed date types
-# 04/06/20    NH    Implemented GUI for ProjectListViewer, AddProjectDialog, and
-#                   AddTaskDialog, and implemented shortcut keys for basic
-#                   functionality
-# 04/05/20    NH    Implemented GUI for TaskListViewer, added branch info
-# 02/17/20    NH    Initial commit
+# 04/20/20  NH  Set add task dialog default date to tomorrow
+# 04/12/20  NH  Added redraw on edit, added save on edit, fixed project list
+#               view, added project filter
+# 04/07/20  NH  Added date based highlighting, fixed date types
+# 04/06/20  NH  Implemented GUI for ProjectListViewer, AddProjectDialog, and
+#               AddTaskDialog, and implemented shortcut keys for basic
+#               functionality
+# 04/05/20  NH  Implemented GUI for TaskListViewer, added branch info
+# 02/17/20  NH  Initial commit
 #
 ###############################################################################
 import datetime as dt
@@ -1136,8 +1137,12 @@ class AddTaskDialog(tk.Toplevel):
         self.__bodyFrame = tk.Frame(self)
         self.grid_columnconfigure(0, weight=1)
 
+        today = dt.datetime.today()
+        tomorrow = (today + dt.timedelta(days=1)).date()
+
         dateEntry = tkc.DateEntry(self.__bodyFrame, textvariable=self.__dateSelector,
                                   mindate=dt.datetime.today().date(), firstweekday='sunday')
+        dateEntry.set_date(tomorrow)
         dateEntry.grid(row=0, column=0, sticky='ew')
 
         projectMenu = tk.OptionMenu(self.__bodyFrame, self.__projectSelector, *
