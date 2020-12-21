@@ -34,14 +34,14 @@
 import datetime as dt
 from enum import Enum
 import tkinter as tk
-import xml.etree.ElementTree as ET
+from tkinter import ttk
 import logging
 import tkcalendar as tkc
 import tkinter.messagebox as tkm
 import sys
-import os
-import uuid
 import re
+
+from data import Task, Project, TaskList, Recurrence
 
 MAJOR_VERSION = 0
 MINOR_VERSION = 0
@@ -54,300 +54,6 @@ OVERDUE_COLOR = '#f4a3a3'
 UPCOMING_COLOR = '#ebec7f'
 
 
-class Project:
-    def __init__(self, name: str, endDate: dt.date, uid=None):
-        '''
-        Creates a new Project object
-        :param name: Project name
-        :type name: str
-        :param endDate: Project end date
-        :type endDate: dt.date
-        '''
-        self.name = name
-        self.endDate = endDate
-        self._tasks = []
-        self.__log = logging.getLogger("ProjectLog.Project")
-        if uid is None:
-            uid = uuid.uuid4()
-        self.__id = uid
-
-    def addTask(self, task):
-        if task in self._tasks:
-            raise RuntimeError("Task already in project")
-        self._tasks.append(task)
-
-    def __eq__(self, other):
-        return self.name == other.name and self.endDate == other.endDate
-
-    def __lt__(self, other):
-        if self.endDate < other.endDate:
-            return True
-        elif self.endDate > other.endDate:
-            return False
-        else:
-            return self.name < other.name
-
-    def __hash__(self):
-        return hash(self.__id)
-
-    def getName(self):
-        return self.name
-
-    def __str__(self):
-        return "{Project: %s - %s}" % (self.name, self.endDate.strftime("%m/%d/%y"))
-
-    def removeTask(self, task):
-        self._tasks.remove(task)
-
-    def getID(self):
-        return str(self.__id)
-
-    def getDate(self):
-        return self.endDate
-
-    def setName(self, name):
-        self.name = name
-
-    def setDate(self, date: dt.datetime):
-        self.endDate = date
-
-    def hasTasks(self):
-        return len(self._tasks) > 0
-
-
-class Task:
-    class Action(Enum):
-        DO = 1
-        READ = 2
-        PREPARE = 3
-        WRITE = 4
-        ATTEND = 5
-        LEARN = 6
-        BRING = 7
-        DUE = 8
-        FINISH = 9
-        PRINT = 10
-        WATCH = 11
-
-    ActionStringMap = {
-        Action.DO: "Do",
-        Action.READ: "Read",
-        Action.PREPARE: "Prepare",
-        Action.WRITE: "Write",
-        Action.ATTEND: "Attend",
-        Action.LEARN: "Learn",
-        Action.BRING: "Bring",
-        Action.DUE: "Due",
-        Action.FINISH: "Finish",
-        Action.PRINT: "Print",
-        Action.WATCH: "Watch",
-    }
-
-    def __init__(self, dueDate: dt.date, project: Project,
-                 desc: str, action: Action = Action.DO, uid=None):
-        '''
-        Creates a new Task object
-        :param dueDate:    Due date
-        :type dueDate:    dt.date
-        :param project:    Associated project
-        :type project:    Project
-        :param desc:    Description
-        :type desc:    str
-        :param action:    Action
-        :type action:    Action
-        '''
-        self.dueDate = dueDate
-        self.project = project
-        self.desc = desc
-        self.action = action
-        self.project.addTask(self)
-        if uid is None:
-            uid = uuid.uuid4()
-        self.__id = uid
-
-    def __eq__(self, other):
-        return self is other
-
-    def __lt__(self, other):
-        if self.dueDate < other.dueDate:
-            return True
-        elif self.dueDate > other.dueDate:
-            return False
-        else:
-            if self.project < other.project:
-                return True
-            elif self.project > other.project:
-                return False
-            else:
-                if self.action.value < other.action.value:
-                    return True
-                elif self.action.value > other.action.value:
-                    return False
-                else:
-                    return self.desc < other.desc
-
-    def __hash__(self):
-        return hash(self.__id)
-
-    def __str__(self):
-        return "{Task: %s: %s - %s by %s}" % (self.project, Task.ActionStringMap[self.action], self.desc, self.dueDate)
-
-    def setDate(self, date: dt.date):
-        self.dueDate = date
-
-    def getDate(self):
-        return self.dueDate
-
-    def getProject(self):
-        return self.project
-
-    def setProject(self, project: Project):
-        self.project.removeTask(self)
-        self.project = project
-        self.project.addTask(self)
-
-    def getAction(self):
-        return self.action
-
-    def setAction(self, action: Action):
-        self.action = action
-
-    def getDesc(self):
-        return self.desc
-
-    def setDesc(self, desc):
-        self.desc = desc
-
-    def getID(self):
-        return str(self.__id)
-
-
-class TaskList:
-    def __init__(self, fname):
-        self._tasks = []
-        self.__projects = []
-        self.__fname = fname
-        self.__log = logging.getLogger('ProjectLog.TaskList')
-        self.__log.info('created')
-        self.__enter__()
-
-    def __enter__(self):
-        self.__log.info('TaskList __enter__')
-        if not os.path.isfile(self.__fname):
-            # need to add empty structure
-            self.save()
-        tree = ET.parse(self.__fname)
-        data = tree.getroot()
-        if data.tag != 'data':
-            raise RuntimeError("Data element not found")
-        tasks = data.find('tasks')
-        projects = data.find('projects')
-        self._tasks = []
-        self.__projects = []
-
-        projectMap = {}
-        actionMap = {}
-        for action in Task.Action:
-            actionMap[Task.ActionStringMap[action]] = action
-
-        for project in projects:
-            projectName = project.attrib['name']
-            projectID = uuid.UUID(project.attrib['id'])
-            projectDate = dt.datetime.strptime(
-                project.attrib['date'], '%m/%d/%y').date()
-            projectObj = Project(projectName, projectDate, projectID)
-            self.__projects.append(projectObj)
-            projectMap[projectID] = projectObj
-
-        for task in tasks:
-            taskID = uuid.UUID(task.attrib['id'])
-            projectID = uuid.UUID(task.attrib['project'])
-            project = projectMap[projectID]
-            taskDate = dt.datetime.strptime(
-                task.attrib['date'], '%m/%d/%y').date()
-            taskAction = actionMap[task.attrib['action']]
-            taskDesc = task.text
-            taskObj = Task(taskDate, project, taskDesc, taskAction, taskID)
-            self._tasks.append(taskObj)
-
-        return self
-
-    def open(self):
-        self.__enter__()
-
-    def close(self):
-        self.__exit__(None, None, None)
-
-    def save(self, *args):
-        root = ET.Element('data')
-        root.set('version', '1')
-        tasks = ET.SubElement(root, 'tasks')
-        projects = ET.SubElement(root, 'projects')
-
-        # add projects
-        for project in self.__projects:
-            projectElement = ET.SubElement(projects, 'project')
-            projectElement.set('id', project.getID())
-            projectElement.set('name', project.getName())
-            projectElement.set('date', project.getDate().strftime('%m/%d/%y'))
-
-        # add tasks
-        for task in self._tasks:
-            taskElement = ET.SubElement(tasks, 'task')
-            taskElement.set('id', task.getID())
-            taskElement.set('project', task.getProject().getID())
-            taskElement.set('date', task.getDate().strftime('%m/%d/%y'))
-            taskElement.set('action', Task.ActionStringMap[task.getAction()])
-            taskElement.text = task.getDesc()
-
-        tree = ET.ElementTree(root)
-        tree.write(self.__fname)
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.__log.info('__exit__')
-        if exc_val is not None:
-            self.__log.exception("Got %s", str(exc_val))
-        self.save()
-
-    def addProject(self, project: Project):
-        '''
-        Adds a project to the task list
-        :param project: Project
-        :type project: Project
-        '''
-        self.__log.info('Added project %s' % project.name)
-        self.__projects.append(project)
-
-    def addTask(self, task: Task):
-        self.__log.info('Added task due %s for project %s to %s' %
-                        (task.dueDate.ctime(), task.project.name, task.desc))
-        self._tasks.append(task)
-
-    def getTasks(self):
-        return self._tasks
-
-    def getProjects(self):
-        return self.__projects
-
-    def getProjectByName(self, name: str):
-        for project in self.__projects:
-            if project.getName() == name:
-                return project
-
-        return None
-
-    def removeProject(self, project: Project):
-        if project.hasTasks():
-            tkm.showerror(
-                title='Error', message='Project still has active tasks')
-            return
-        self.__projects.remove(project)
-
-    def removeTask(self, task: Task):
-        self._tasks.remove(task)
-        task.getProject().removeTask(task)
-
-
 class TaskListViewer(tk.Frame):
     class ColumnProperties(Enum):
         COLLAPSE = {'index': 0, 'width': 20, 'label': '', 'weight': 0}
@@ -356,6 +62,8 @@ class TaskListViewer(tk.Frame):
         ACTION = {'index': 3, 'width': 90, 'label': 'Action', 'weight': 0}
         DESCRIPTION = {'index': 4, 'width': 300,
                        'label': "Description", 'weight': 1}
+        RECURRENCE = {'index': 5, 'width': 20,
+                      'label': "Recurring", 'weight': 0}
 
     SELECTED_TASK_FRAME_VIEW = {
         "highlightbackground": 'black', 'highlightthickness': 1}
@@ -542,6 +250,15 @@ class TaskListViewer(tk.Frame):
             widgets[3] = descEntry
             self.__currentInputWidget = descEntry
             self.__currentInputType = TaskListViewer.ColumnProperties.DESCRIPTION
+        elif event.widget is widgets[4]:
+            # open dialog
+            if task.getRecurrence():
+                RecurrenceDialog(self, task.getRecurrence())
+            else:
+                dialog = RecurrenceDialog(self, dueDate=task.getDate())
+                task.setRecurrence(dialog.recurrence)
+            self.__currentInputWidget = widgets[3]
+
         self.__taskMap[self.__currentInputWidget] = task
         self.__currentInputWidget.focus_set()
 
@@ -811,6 +528,7 @@ class TaskListViewer(tk.Frame):
                     column.value['index'], minsize=column.value['width'], weight=column.value['weight'])
 
             self.__frameMap[task] = taskFrame
+
             datelabel = tk.Label(
                 taskFrame, text=task.dueDate.strftime('%a, %b %d'), anchor='w', **widgetView)
             datelabel.grid(
@@ -818,6 +536,7 @@ class TaskListViewer(tk.Frame):
             datelabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
             datelabel.bind('<Button-1>', self._onTaskSingleClick)
             self.__taskMap[datelabel] = task
+
             projectLabel = tk.Label(
                 taskFrame, text=task.project.name, anchor='w', **widgetView)
             projectLabel.grid(
@@ -825,6 +544,7 @@ class TaskListViewer(tk.Frame):
             projectLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
             projectLabel.bind('<Button-1>', self._onTaskSingleClick)
             self.__taskMap[projectLabel] = task
+
             actionLabel = tk.Label(
                 taskFrame, text=Task.ActionStringMap[task.action], anchor='w', **widgetView)
             actionLabel.grid(
@@ -832,6 +552,7 @@ class TaskListViewer(tk.Frame):
             actionLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
             actionLabel.bind('<Button-1>', self._onTaskSingleClick)
             self.__taskMap[actionLabel] = task
+
             descLabel = tk.Label(
                 taskFrame, text=task.desc, anchor='w', **widgetView)
             descLabel.grid(
@@ -839,8 +560,19 @@ class TaskListViewer(tk.Frame):
             descLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
             descLabel.bind('<Button-1>', self._onTaskSingleClick)
             self.__taskMap[descLabel] = task
+
+            if task.getRecurrence():
+                recurText = u"\u2713"
+            else:
+                recurText = ' '
+            recurLabel = tk.Label(
+                taskFrame, text=recurText, anchor='w', **widgetView)
+            recurLabel.grid(
+                row=0, column=TaskListViewer.ColumnProperties.RECURRENCE.value['index'], sticky='ew')
+            recurLabel.bind('<Double-Button-1>', self._onTaskDoubleClick)
+            self.__taskMap[recurLabel] = task
             self.__widgetMap[task] = [datelabel,
-                                      projectLabel, actionLabel, descLabel]
+                                      projectLabel, actionLabel, descLabel, recurLabel]
             row += 1
 
 
@@ -1080,7 +812,7 @@ class ProjectListviewer(tk.Frame):
         project = self.__projectMap[event.widget]
 
         project.setDate(dt.datetime.strptime(
-            self.__inputVar.get(), '%m/%d/%y'))
+            self.__inputVar.get(), '%m/%d/%y').date())
 
         parent = self.__currentInputWidget.master
         self.__projectMap.pop(self.__currentInputWidget)
@@ -1103,7 +835,10 @@ class ProjectListviewer(tk.Frame):
     def removeProject(self):
         if self.__projectSelected is None:
             return
-        self.__model.removeProject(self.__projectSelected)
+        try:
+            self.__model.removeProject(self.__projectSelected)
+        except RuntimeError as e:
+            tkm.showerror(title='Error', message=str(e))
         self.draw()
         self.__model.save()
 
@@ -1120,6 +855,7 @@ class AddTaskDialog(tk.Toplevel):
         self.__actionSelector.set(Task.ActionStringMap[Task.Action.DO])
         self.__projectSelector = tk.StringVar()
         self.__descVar = tk.StringVar()
+        self.__recurrence = None
         tk.Toplevel.__init__(self, parent)
 
         self.transient(parent)
@@ -1160,10 +896,14 @@ class AddTaskDialog(tk.Toplevel):
         descEntry.bind('<Return>', self.__ok)
         descEntry.bind('<KP_Enter>', self.__ok)
 
+        recurrenceButton = tk.Button(
+            self.__bodyFrame, text="Recurrence", command=self.__recur)
+        recurrenceButton.grid(row=4, column=0, sticky='ew')
+
         buttonFrame = tk.Frame(self.__bodyFrame)
         buttonFrame.grid_columnconfigure(0, weight=1)
         buttonFrame.grid_columnconfigure(1, weight=1)
-        buttonFrame.grid(row=4, column=0, sticky='ew')
+        buttonFrame.grid(row=5, column=0, sticky='ew')
 
         okButton = tk.Button(buttonFrame, text='OK', command=self.__ok)
         okButton.grid(row=0, column=0, sticky='ew')
@@ -1190,13 +930,23 @@ class AddTaskDialog(tk.Toplevel):
             if Task.ActionStringMap[action] == self.__actionSelector.get():
                 break
 
-        task = Task(dueDate, project, desc, action)
+        task = Task(dueDate, project, desc, action,
+                    recurrence=self.__recurrence)
         self.__taskList.addTask(task)
         self.__cancel()
 
     def __cancel(self, event=None):
         self.__parent.focus_set()
         self.destroy()
+
+    def __recur(self, event=None):
+        if self.__recurrence:
+            dialog = RecurrenceDialog(self, self.__recurrence)
+        else:
+            print(self.__dateSelector.get())
+            dialog = RecurrenceDialog(self, dueDate=dt.datetime.strptime(
+                self.__dateSelector.get(), '%m/%d/%y').date())
+            self.__recurrence = dialog.recurrence
 
 
 class AddProjectDialog(tk.Toplevel):
@@ -1317,6 +1067,7 @@ class ProjectLog(tk.Tk):
         debugmenu.add_command(label='Print Projects',
                               command=self.__printProjects)
         debugmenu.add_command(label='d1', command=self.__taskListFrame.debug)
+        debugmenu.add_command(label='test', command=self.__test)
         self.__menuBar.add_cascade(label="Debug", menu=debugmenu)
         self.config(menu=self.__menuBar)
 
@@ -1346,6 +1097,92 @@ class ProjectLog(tk.Tk):
 
     def save(self, event=None):
         self.__taskList.save()
+
+    def __test(self, event=None):
+        pass
+
+
+class RecurrenceDialog(tk.Toplevel):
+    def __init__(self, parent, recurrence: Recurrence = None, dueDate: dt.date = None):
+        self.__parent = parent
+        self.recurrence = recurrence
+
+        if self.recurrence:
+            self.__typeSelector = tk.StringVar(
+                value=self.recurrence.recurrence)
+            self.__valueSelector = tk.IntVar(value=self.recurrence.value)
+            self.__dateSelector = tk.StringVar(
+                value=self.__recurrence.dueDate.strftime("%m/%d/%y"))
+            self.__initialDate = self.__recurrence.dueDate
+        else:
+            self.__typeSelector = tk.StringVar(
+                value=Recurrence.DAILY_RECURRENCE)
+            self.__valueSelector = tk.IntVar(value=1)
+            self.__dateSelector = tk.StringVar(
+                value=dueDate.strftime("%m/%d/%y"))
+            self.__initialDate = dueDate
+
+        self.__bodyFrame = None
+
+        tk.Toplevel.__init__(self, parent)
+
+        self.transient(parent)
+        self.title("Recurrence")
+        self.__createWidget()
+        self.geometry("+%d+%d" % (parent.winfo_rootx() + 50,
+                                  parent.winfo_rooty() + 50))
+
+        self.wait_window(self)
+
+    def __createWidget(self):
+        if self.__bodyFrame:
+            self.__bodyFrame.destroy()
+
+        self.__bodyFrame = tk.Frame(self)
+        self.__bodyFrame.grid_columnconfigure(0, weight=1, pad=5)
+        self.__bodyFrame.grid_columnconfigure(1, weight=1, pad=5)
+
+        tk.Label(self.__bodyFrame, text='Recurrence Type').grid(
+            row=0, column=0, sticky='ew')
+        tk.Label(self.__bodyFrame, text='Recurrence Value').grid(
+            row=1, column=0, sticky='ew')
+        tk.Label(self.__bodyFrame, text='Recurrence Date').grid(
+            row=2, column=0, sticky='ew')
+
+        combobox = ttk.Combobox(
+            self.__bodyFrame, textvariable=self.__typeSelector)
+        combobox['values'] = Recurrence.options
+        combobox.grid(row=0, column=1, sticky='ew')
+
+        tk.Entry(self.__bodyFrame, textvariable=self.__valueSelector).grid(
+            row=1, column=1, sticky='ew')
+
+        tkc.DateEntry(
+            self.__bodyFrame, textvariable=self.__dateSelector, firstweekday='sunday', year=self.__initialDate.year, month=self.__initialDate.month, day=self.__initialDate.day).grid(row=2, column=1, sticky='ew')
+
+        tk.Button(self.__bodyFrame, text='OK',
+                  command=self.__ok).grid(row=3, column=0)
+        tk.Button(self.__bodyFrame, text='Cancel',
+                  command=self.__cancel).grid(row=3, column=1)
+
+        self.__bodyFrame.grid(row=0, column=0, sticky='ew')
+
+    def __ok(self, event=None):
+        self.withdraw()
+        self.update_idletasks()
+        if self.recurrence:
+            self.recurrence.dueDate = dt.datetime.strptime(
+                self.__dateSelector.get(), '%m/%d/%y').date()
+            self.recurrence.recurrence = self.__typeSelector.get()
+            self.recurrence.value = self.__valueSelector.get()
+        else:
+            self.recurrence = Recurrence(self.__typeSelector.get(), self.__valueSelector.get(), dt.datetime.strptime(
+                self.__dateSelector.get(), '%m/%d/%y').date())
+        self.__cancel()
+
+    def __cancel(self, event=None):
+        self.__parent.focus_set()
+        self.destroy()
 
 
 if __name__ == '__main__':
