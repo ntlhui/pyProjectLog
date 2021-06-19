@@ -43,6 +43,9 @@ import re
 
 from data import Task, Project, TaskList, Recurrence
 
+import appdirs
+import os
+
 MAJOR_VERSION = 0
 MINOR_VERSION = 0
 BUILD_NUMBER = 1
@@ -1187,6 +1190,9 @@ class RecurrenceDialog(tk.Toplevel):
 
 if __name__ == '__main__':
     global app
+    appdirs.appname = "pyProjectLog"
+    appdirs.appauthor = "ntlhui"
+
     logName = dt.datetime.now().strftime('%Y.%m.%d.%H.%M.%S.log')
     logName = 'log.log'
     logger = logging.getLogger()
