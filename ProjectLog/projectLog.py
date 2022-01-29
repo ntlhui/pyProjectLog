@@ -9,12 +9,14 @@ import tkinter as tk
 import tkinter.messagebox as tkm
 from enum import Enum
 from pathlib import Path
+from typing import Optional
 
 import appdirs
 import tkcalendar as tkc
 
 import ProjectLog
 from ProjectLog.config import Config
+from ProjectLog.core import ProjectLogCore
 from ProjectLog.data import Task, TaskList
 from ProjectLog.ui.dialog import (AddProjectDialog, AddTaskDialog,
                                   RecurrenceDialog)
@@ -60,7 +62,7 @@ class TaskListViewer(tk.Frame):
     def debug(self):
         print(self.debugWidget.winfo_width())
 
-    def __init__(self, parent, model: TaskList):
+    def __init__(self, parent, model: ProjectLogCore):
         super().__init__(parent)
         self.__model = model
         self.__taskMap = {}
@@ -455,7 +457,7 @@ class TaskListViewer(tk.Frame):
 
     def markComplete(self, event=None):
         task = self.__taskSelected
-        self.__model.removeTask(task)
+        self.__model.completeTask(task)
         self.draw()
         self.__model.save()
 
@@ -826,26 +828,25 @@ class ProjectLogApp(tk.Tk):
         super().__init__()
         self.__log = logging.getLogger('ProjectLog.ProjectLog')
         self.__log.info("created")
-        self.__menuBar = None  # type: tk.Menu
-        self.__taskListFrame = None
-        self.__projectListFrame = None  # type: tk.Frame
-        self.__taskList = TaskList("test.xml")
+        self.__menuBar: Optional[tk.Menu] = None
+        self.__taskListFrame: Optional[TaskListViewer] = None
+        self.__projectListFrame: Optional[ProjectListviewer] = None
+        self.__core = ProjectLogCore()
 
-        self.title("Project Task Tracker v%d.%d.%d.%s" %
-                   (MAJOR_VERSION, MINOR_VERSION, BUILD_NUMBER, BRANCH))
+        self.title(f"Project Task Tracker v{ProjectLog.__version__}")
         self.__createWidgets()
         self.__createMenu()
         self.protocol('WM_DELETE_WINDOW', self.__deleteWindowHandler)
 
     def __deleteWindowHandler(self):
-        self.__taskList.close()
+        self.__core.close()
         self.destroy()
 
     def __createWidgets(self):
         self.grid_columnconfigure(0, weight=1, pad=5)
         self.grid_columnconfigure(1, pad=5)
         self.grid_rowconfigure(0, weight=1)
-        self.__taskListFrame = TaskListViewer(self, self.__taskList)
+        self.__taskListFrame = TaskListViewer(self, self.__core)
         self.__taskListFrame.grid(row=0, column=0, sticky='new')
         self.__projectListFrame = ProjectListviewer(self, self.__taskList)
         self.__projectListFrame.grid(row=0, column=1, sticky='new')
@@ -882,11 +883,15 @@ class ProjectLogApp(tk.Tk):
         print([project.name for project in self.__taskList.getProjects()])
 
     def __addProject(self, event=None):
+        if self.__taskListFrame is None or self.__projectListFrame is None:
+            raise RuntimeError()
         self.__log.info("Add Project clicked")
         AddProjectDialog(self, self.__taskList)
         self.__projectListFrame.draw()
 
     def __addTask(self, event=None):
+        if self.__taskListFrame is None or self.__projectListFrame is None:
+            raise RuntimeError()
         if len(self.__taskList.getProjects()) == 0:
             self.__log.warning("No projects")
             return
@@ -894,6 +899,8 @@ class ProjectLogApp(tk.Tk):
         self.__taskListFrame.draw()
 
     def __redraw(self, event=None):
+        if self.__taskListFrame is None or self.__projectListFrame is None:
+            raise RuntimeError()
         self.__taskListFrame.draw()
         self.__projectListFrame.draw()
 

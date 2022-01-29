@@ -26,7 +26,7 @@ class Config:
             with open(configPath.as_posix(), 'w') as configFile:
                 user_log_path = Path(appdirs.user_log_dir(appname=ProjectLog.__appname__), 'log.log')
                 user_log = user_log_path.as_posix()
-                user_data_path = Path(appdirs.user_data_dir(appname=ProjectLog.__appname__))
+                user_data_path = Path(appdirs.user_data_dir(appname=ProjectLog.__appname__), 'data.xml')
                 configFile.write(yaml.safe_dump(
                     {
                         'dataPath': user_data_path.as_posix(),

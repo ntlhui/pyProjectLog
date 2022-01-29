@@ -6,6 +6,7 @@ Created on Dec 20, 2020
 
 from enum import Enum
 import datetime as dt
+from pathlib import Path
 import uuid
 import logging
 import xml.etree.ElementTree as ET
@@ -244,7 +245,7 @@ class Task:
 
 
 class TaskList:
-    def __init__(self, fname):
+    def __init__(self, fname: Path):
         self._tasks = []
         self.__projects = []
         self.__fname = fname
@@ -254,7 +255,7 @@ class TaskList:
 
     def __enter__(self):
         self.__log.info('TaskList __enter__')
-        if not os.path.isfile(self.__fname):
+        if not self.__fname.is_file():
             # need to add empty structure
             self.save()
         tree = ET.parse(self.__fname)
@@ -310,7 +311,7 @@ class TaskList:
 
     def save(self, *args):
         if ENABLE_BACKUP_XML:
-            os.rename(self.__fname, "test_%s.xml" %
+            os.rename(self.__fname.as_posix(), "test_%s.xml" %
                       (dt.datetime.now().strftime("%Y.%m.%d.%H.%M.%S")))
 
         root = ET.Element('data')
@@ -343,7 +344,7 @@ class TaskList:
                     'date', task.getRecurrence().dueDate.strftime('%m/%d/%y'))
 
         tree = ET.ElementTree(root)
-        tree.write(self.__fname)
+        tree.write(self.__fname.as_posix())
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.__log.info('__exit__')
