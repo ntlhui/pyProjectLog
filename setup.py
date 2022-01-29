@@ -8,7 +8,9 @@ setup(
     author_email='ntlhui@gmail.com',
     install_requires=[
         'appdirs',
-        'tkcalendar'
+        'tkcalendar',
+        'schema',
+        'pyYaml'
     ],
     packages=find_packages(),
     entry_points={

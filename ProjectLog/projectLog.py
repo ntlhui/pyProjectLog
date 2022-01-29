@@ -2,17 +2,22 @@
 
 import datetime as dt
 import logging
+import logging.handlers
 import re
 import sys
 import tkinter as tk
 import tkinter.messagebox as tkm
 from enum import Enum
+from pathlib import Path
 
 import appdirs
 import tkcalendar as tkc
 
+import ProjectLog
+from ProjectLog.config import Config
 from ProjectLog.data import Task, TaskList
-from ProjectLog.ui.dialog import RecurrenceDialog, AddProjectDialog, AddTaskDialog
+from ProjectLog.ui.dialog import (AddProjectDialog, AddTaskDialog,
+                                  RecurrenceDialog)
 
 MAJOR_VERSION = 0
 MINOR_VERSION = 0
@@ -816,7 +821,7 @@ class ProjectListviewer(tk.Frame):
 
 
 
-class ProjectLog(tk.Tk):
+class ProjectLogApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.__log = logging.getLogger('ProjectLog.ProjectLog')
@@ -902,11 +907,12 @@ class ProjectLog(tk.Tk):
 
 
 def main():
-    appdirs.appname = "pyProjectLog"
-    appdirs.appauthor = "ntlhui"
+    configPath = Path(appdirs.user_config_dir(ProjectLog.__appname__), 'config.yaml')
+    print(f'Config path is {configPath}')
+    config = Config.instance(configPath=configPath)
 
-    logName = dt.datetime.now().strftime('%Y.%m.%d.%H.%M.%S.log')
-    logName = 'log.log'
+    logName = config.logPath
+    print(f"Logging to {logName}")
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     consoleOutput = logging.StreamHandler(sys.stdout)
@@ -915,12 +921,14 @@ def main():
         '%(asctime)s.%(msecs)03d: %(levelname)s:%(name)s: %(message)s', datefmt='%Y-%M-%d %H:%m:%S')
     consoleOutput.setFormatter(formatter)
     logger.addHandler(consoleOutput)
-    fileOutput = logging.FileHandler(logName)
+
+    logName.parent.mkdir(parents=True, exist_ok=True)
+    fileOutput = logging.handlers.RotatingFileHandler(logName, maxBytes=5*1024*1024, backupCount=2)
     fileOutput.setLevel(logging.DEBUG)
     fileOutput.setFormatter(formatter)
     logger.addHandler(fileOutput)
 
-    app = ProjectLog()
+    app = ProjectLogApp()
     app.mainloop()
 
 
