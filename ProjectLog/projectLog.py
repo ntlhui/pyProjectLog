@@ -902,7 +902,6 @@ class ProjectLog(tk.Tk):
 
 
 def main():
-    global app
     appdirs.appname = "pyProjectLog"
     appdirs.appauthor = "ntlhui"
 
