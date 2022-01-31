@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from multiprocessing import AuthenticationError
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -9,6 +11,7 @@ from uuid import UUID
 
 import pyrebase
 from pyrebase.pyrebase import Database, Firebase
+
 from ProjectLog.data import Project, Task
 from ProjectLog.serializable import Serializable
 
@@ -62,6 +65,8 @@ class TaskLog:
             self.__dataRoot = Path('data', self.__user['localId'])
             self.__setUpDb()
             self.__loadFromDb()
+            threading.Thread(target=self.__autoRefresh, daemon=True).start()
+
         except HTTPError:
             raise AuthenticationError
 
@@ -120,7 +125,12 @@ class TaskLog:
             raise RuntimeError
         auth = self.__firebase.auth()
         auth.refresh(self.__user['refreshToken'])
-    
+
+    def __autoRefresh(self):
+        while(1):
+            time.sleep(1800)
+            self.refreshAuth()
+
     class AuthenticationError(RuntimeError):
         pass
 
