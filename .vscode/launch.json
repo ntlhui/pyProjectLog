@@ -5,6 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ProjectLog/firebase.py",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "ProjectLog",
             "type": "python",
             "request": "launch",

@@ -10,7 +10,8 @@ setup(
         'appdirs',
         'tkcalendar',
         'schema',
-        'pyYaml'
+        'pyYaml',
+        'pyrebase'
     ],
     packages=find_packages(),
     entry_points={

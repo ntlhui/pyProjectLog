@@ -16,7 +16,9 @@ class Config:
     CONFIG_SCHEMA = schema.Schema(
         {
             'dataPath': str,
-            'logPath': str
+            'logPath': str,
+            'email': str,
+            'password': str
         }
     )
 
@@ -30,16 +32,20 @@ class Config:
                 configFile.write(yaml.safe_dump(
                     {
                         'dataPath': user_data_path.as_posix(),
-                        'logPath': user_log
+                        'logPath': user_log,
+                        'email': '',
+                        'password': ''
                     }
                 ))
         
         with open(configPath.as_posix(), 'r') as configFile:
             data = yaml.safe_load(configFile)
-            validated_data = self.CONFIG_SCHEMA.validate(data)
+            self.CONFIG_SCHEMA.validate(data)
         
-        self.__dataPath = validated_data['dataPath']
-        self.__logPath = validated_data['logPath']
+        self.__dataPath = data['dataPath']
+        self.__logPath = data['logPath']
+        self.__email = data['email']
+        self.__password = data['password']
 
     @property
     def dataPath(self) -> Path:
@@ -48,6 +54,14 @@ class Config:
     @property
     def logPath(self) -> Path:
         return Path(self.__logPath)
+
+    @property
+    def email(self) -> str:
+        return self.__email
+
+    @property
+    def password(self) -> str:
+        return self.__password
 
     @classmethod
     def instance(cls, *, configPath: Path=None) -> Config:

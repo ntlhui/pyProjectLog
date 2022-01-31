@@ -2,10 +2,12 @@ import datetime as dt
 import logging
 import tkinter as tk
 from tkinter import ttk
+from typing import Any, Optional
 
 import tkcalendar as tkc
 from ProjectLog.data import Project, Recurrence, Task
-
+from ProjectLog.firebase import TaskLog
+from ProjectLog.ui.widgets import SelectableComboBox
 
 class RecurrenceDialog(tk.Toplevel):
     def __init__(self, parent, recurrence: Recurrence = None, dueDate: dt.date = None):
@@ -162,16 +164,16 @@ class AddProjectDialog(tk.Toplevel):
 
 
 class AddTaskDialog(tk.Toplevel):
-    def __init__(self, parent, tasklist):
+    def __init__(self, parent: Any, tasklist: TaskLog):
         self.__parent = parent
         self.__taskList = tasklist
-        self.__bodyFrame = None
+        self.__bodyFrame: Optional[tk.Frame] = None
         self.__acceptFrame = None
         self.__initial_focus = None
         self.__dateSelector = tk.StringVar()
-        self.__actionSelector = tk.StringVar()
+        self.__actionSelector = tk.Variable()
         self.__actionSelector.set(Task.ActionStringMap[Task.Action.DO])
-        self.__projectSelector = tk.StringVar()
+        self.__projectSelector = tk.Variable()
         self.__descVar = tk.StringVar()
         self.__recurrence = None
         tk.Toplevel.__init__(self, parent)
@@ -199,15 +201,25 @@ class AddTaskDialog(tk.Toplevel):
         dateEntry.set_date(tomorrow)
         dateEntry.grid(row=0, column=0, sticky='ew')
 
-        projectMenu = tk.OptionMenu(self.__bodyFrame, self.__projectSelector, *
-                                    (project.name for project in sorted(self.__taskList.getProjects())))
-        projectMenu.configure(takefocus=1)
-        projectMenu.grid(row=1, column=0, sticky='ew')
+        project_options = {project.name: project for project in sorted(self.__taskList.getProjects())}
+        self.projectMenu = SelectableComboBox(
+            master=self.__bodyFrame,
+            values=project_options,
+            variable=self.__projectSelector,
+            initial_value=''
+        )
+        self.projectMenu.configure(takefocus=1)
+        self.projectMenu.grid(row=1, column=0, sticky='ew')
 
-        actionMenu = tk.OptionMenu(self.__bodyFrame, self.__actionSelector, *
-                                   (Task.ActionStringMap[action] for action in Task.Action))
-        actionMenu.configure(takefocus=1)
-        actionMenu.grid(row=2, column=0, sticky='ew')
+        action_options = {Task.ActionStringMap[action]:action for action in Task.Action}
+        self.actionMenu = SelectableComboBox(
+            master=self.__bodyFrame,
+            values=action_options,
+            initial_value='',
+            variable=self.__actionSelector
+        )
+        self.actionMenu.configure(takefocus=1)
+        self.actionMenu.grid(row=2, column=0, sticky='ew')
 
         descEntry = tk.Entry(self.__bodyFrame, textvariable=self.__descVar)
         descEntry.grid(row=3, column=0, sticky='ew')
@@ -240,13 +252,9 @@ class AddTaskDialog(tk.Toplevel):
 
         dueDate = dt.datetime.strptime(
             self.__dateSelector.get(), '%m/%d/%y').date()
-        project = self.__taskList.getProjectByName(
-            self.__projectSelector.get())
+        project = self.projectMenu.currentValue
         desc = self.__descVar.get()
-
-        for action in Task.Action:
-            if Task.ActionStringMap[action] == self.__actionSelector.get():
-                break
+        action = self.actionMenu.currentValue
 
         task = Task(dueDate, project, desc, action,
                     recurrence=self.__recurrence)
