@@ -11,7 +11,7 @@ setup(
         'tkcalendar',
         'schema',
         'pyYaml',
-        'pyrebase'
+        'pyrebase4'
     ],
     packages=find_packages(),
     entry_points={
