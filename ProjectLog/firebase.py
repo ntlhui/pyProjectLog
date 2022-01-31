@@ -162,8 +162,12 @@ class TaskLog:
     def completeTask(self, task: Task):
         if self.__db is None or self.__dataRoot is None:
             raise RuntimeError
-        self.__tasks.remove(task)
-        data = {
-            self.__dataRoot.joinpath('tasks', task.uid.hex).as_posix():None
-        }
-        self.__db.update(data, token=self.__token)
+        if task.recurrence:
+            task.dueDate = task.recurrence.getNextDate()
+        else:
+            self.__tasks.remove(task)
+            data = {
+                self.__dataRoot.joinpath('tasks', task.uid.hex).as_posix():None,
+                self.__dataRoot.joinpath('archivetasks', task.uid.hex).as_posix():task.toDict()
+            }
+            self.__db.update(data, token=self.__token)

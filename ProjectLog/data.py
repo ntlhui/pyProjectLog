@@ -60,41 +60,50 @@ class Project(Serializable):
 
     def addTask(self, task: Task):
         self.__tasks.append(task)
-        self.__doChangeCbs()
 
     def __eq__(self, other) -> bool:
         return self.name == other.name and self.priority == other.priority
 
     def __lt__(self, other):
-        if isinstance(self.priority, dt.date) and isinstance(other.priority, dt.date):
-            if self.priority < other.priority:
+        if isinstance(self.__priority, dt.date) and isinstance(other.priority, dt.date):
+            if self.__priority < other.priority:
                 return True
-            elif self.priority > other.priority:
+            elif self.__priority > other.priority:
                 return False
             else:
-                return self.name < other.name
+                return self.__name < other.name
+        elif isinstance(self.__priority, int) and isinstance(other.priority, int):
+            if self.__priority < other.priority:
+                return True
+            elif self.__priority > other.priority:
+                return False
+            else:
+                return self.__name < other.name
+        elif isinstance(self.__priority, int) and isinstance(other.priority, dt.date):
+            return False
+        else:
+            return True
 
     def removeTask(self, task: Task):
         self.__tasks.remove(task)
-        self.__doChangeCbs()
 
     def hasTasks(self):
         return len(self.__tasks) > 0
 
     def toDict(self) -> Dict[str, Union[str, int, List[str]]]:
-        if isinstance(self.priority, int):
-            priority = self.priority
-        elif isinstance(self.priority, dt.date):
-            priority = self.priority.toordinal()
+        if isinstance(self.__priority, int):
+            priority = self.__priority
+        elif isinstance(self.__priority, dt.date):
+            priority = self.__priority.toordinal()
         else:
             raise RuntimeError
 
-        tasks = [task.uid.hex for task in self.tasks if isinstance(task, Task)]
-        tasks.extend([id.hex for id in self.tasks if isinstance(id, UUID)])
+        tasks = [task.uid.hex for task in self.__tasks if isinstance(task, Task)]
+        tasks.extend([id.hex for id in self.__tasks if isinstance(id, UUID)])
         return {
-            'name': self.name,
+            'name': self.__name,
             'priority': priority,
-            'uid': self.uid.hex
+            'uid': self.__uid.hex
         }
 
     @classmethod
@@ -131,8 +140,8 @@ class Project(Serializable):
         for t in [t for t in self.tasks if isinstance(t, UUID)]:
             obj = self._resolveObj(t, Task, objects)
             if obj is not None:
-                self.tasks.append(obj)
-                self.tasks.remove(t)
+                self.__tasks.append(obj)
+                self.__tasks.remove(t)
 
 
 class Recurrence(Serializable):
@@ -181,6 +190,8 @@ class Recurrence(Serializable):
     WEEKDAY_RECURRENCE = "weekday"
     MONTHDAY_RECURRENCE = "monthday"
     MONTHWEEKDAY_RECURRENCE = "monthwday"
+    options = (DAILY_RECURRENCE, WEEKDAY_RECURRENCE,
+               MONTHDAY_RECURRENCE, MONTHWEEKDAY_RECURRENCE)
 
     def getNextDate(self) -> dt.date:
         if self.recurrence == self.DAILY_RECURRENCE:
@@ -249,6 +260,8 @@ class Task(Serializable):
             self.__uid = uid
 
         self.__changeCb: List[Callback] = []
+        if isinstance(self.__project, Project):
+            self.__project.addTask(self)
 
     def registerOnChangeCallback(self, fn: Callable, args: Tuple = (), kwargs: Dict[str, Any] = {}):
         self.__changeCb.append(Callback(fn=fn, kwargs=kwargs, args=args))
@@ -306,10 +319,6 @@ class Task(Serializable):
         self.__dueDate = dueDate
         self.__doChangeCbs()
 
-    def __post_init__(self):
-        if isinstance(self.project, Project):
-            self.project.addTask(self)
-
     class Action(Enum):
         DO = 1
         READ = 2
@@ -341,51 +350,51 @@ class Task(Serializable):
         return self is other
 
     def __lt__(self, other):
-        if self.dueDate < other.dueDate:
+        if self.__dueDate < other.dueDate:
             return True
-        elif self.dueDate > other.dueDate:
+        elif self.__dueDate > other.dueDate:
             return False
         else:
-            if self.project < other.project:
+            if self.__project < other.project:
                 return True
-            elif self.project > other.project:
+            elif self.__project > other.project:
                 return False
             else:
-                if self.action.value < other.action.value:
+                if self.__action.value < other.action.value:
                     return True
-                elif self.action.value > other.action.value:
+                elif self.__action.value > other.action.value:
                     return False
                 else:
-                    return self.desc < other.desc
+                    return self.__desc < other.desc
 
     def complete(self, objects: Dict[UUID, Serializable]):
         if isinstance(self.project, UUID):
             obj = self._resolveObj(self.project, Project, objects)
             if obj is not None:
-                self.project = obj
-                self.project.addTask(self)
+                self.__project = obj
+                self.__project.addTask(self)
             
     
     def isComplete(self) -> bool:
-        return isinstance(self.project, UUID)
+        return isinstance(self.__project, UUID)
 
     def toDict(self) -> Dict[str, Any]:
-        if isinstance(self.project, Project):
-            project = self.project.uid.hex
-        elif isinstance(self.project, UUID):
-            project = self.project.hex
+        if isinstance(self.__project, Project):
+            project = self.__project.uid.hex
+        elif isinstance(self.__project, UUID):
+            project = self.__project.hex
         else:
             raise RuntimeError
         data = {
-            'dueDate': self.dueDate.toordinal(),
+            'dueDate': self.__dueDate.toordinal(),
             'project': project,
-            'desc': self.desc,
-            'action': self.action.value,
-            'uid': self.uid.hex
+            'desc': self.__desc,
+            'action': self.__action.value,
+            'uid': self.__uid.hex
         }
 
-        if self.recurrence is not None:
-            data['recurrence'] = self.recurrence.toDict()
+        if self.__recurrence is not None:
+            data['recurrence'] = self.__recurrence.toDict()
         return data
 
     @classmethod

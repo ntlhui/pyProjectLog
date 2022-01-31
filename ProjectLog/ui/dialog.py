@@ -269,7 +269,6 @@ class AddTaskDialog(tk.Toplevel):
         if self.__recurrence:
             dialog = RecurrenceDialog(self, self.__recurrence)
         else:
-            print(self.__dateSelector.get())
             dialog = RecurrenceDialog(self, dueDate=dt.datetime.strptime(
                 self.__dateSelector.get(), '%m/%d/%y').date())
             self.__recurrence = dialog.recurrence

@@ -129,7 +129,7 @@ def main():
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     consoleOutput = logging.StreamHandler(sys.stdout)
-    consoleOutput.setLevel(logging.DEBUG)
+    consoleOutput.setLevel(logging.WARNING)
     formatter = logging.Formatter(
         '%(asctime)s.%(msecs)03d: %(levelname)s:%(name)s: %(message)s', datefmt='%Y-%M-%d %H:%m:%S')
     consoleOutput.setFormatter(formatter)
