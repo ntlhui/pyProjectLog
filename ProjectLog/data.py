@@ -195,14 +195,14 @@ class Recurrence(Serializable):
 
     def getNextDate(self) -> dt.date:
         if self.recurrence == self.DAILY_RECURRENCE:
-            return self.dueDate + dt.timedelta(days=self.value)
+            self.dueDate += dt.timedelta(days=self.value)
         elif self.recurrence == self.WEEKDAY_RECURRENCE:
-            return self.dueDate + dt.timedelta(days=7 * self.value)
+            self.dueDate += dt.timedelta(days=7 * self.value)
         elif self.recurrence == self.MONTHDAY_RECURRENCE:
             dayOfMonth = self.dueDate.day
             year = self.dueDate.year
             month = self.dueDate.month + self.value
-            return dt.date(year, month, dayOfMonth)
+            self.dueDate = dt.date(year, month, dayOfMonth)
         elif self.recurrence == self.MONTHWEEKDAY_RECURRENCE:
             weekday = self.dueDate.weekday()
             weekNum = int(self.dueDate.day - 1 / 7) + 1
@@ -211,9 +211,10 @@ class Recurrence(Serializable):
             adj = nextMonth.weekday() - weekday
             nextMonth += dt.timedelta(days=adj)
             nextMonth += dt.timedelta(weeks=weekNum)
-            return nextMonth
+            self.dueDate = nextMonth
         else:
             raise RuntimeError
+        return self.dueDate
     
     def toDict(self) -> Dict[str, Any]:
         return {
