@@ -124,7 +124,8 @@ class TaskLog:
         if self.__user is None:
             raise RuntimeError
         auth = self.__firebase.auth()
-        auth.refresh(self.__user['refreshToken'])
+        self.__user = auth.refresh(self.__user['refreshToken'])
+        self.__token = self.__user['idToken']
 
     def __autoRefresh(self):
         while(1):
